@@ -1,0 +1,25 @@
+{
+  "_note": "结构示例。真实快照由 `python src/almanac.py snapshot` 生成在本地 data/snapshots/，不入库——它含账户积分余额与券名。",
+  "date": "YYYY-MM-DD",
+  "generated_at": "YYYY-MM-DDTHH:MM:SS",
+  "account": {
+    "available": "<本地可见>",
+    "expired": "<本地可见>",
+    "expiring_this_month": "<本地可见>"
+  },
+  "coupons": [
+    { "name": "<券名>", "price": "<面额>", "end": "<YYYY-MM-DDTHH:MM:SS>" }
+  ],
+  "redeem_rates": [
+    { "name": "<商品名>", "point": "<所需积分>", "cash": "<面值>", "rate": "<元/分>" }
+  ],
+  "calendar": {
+    "YYYY-MM-DD": { "status": "past|today|upcoming", "activities": [] }
+  },
+  "verdict": {
+    "date": "YYYY-MM-DD",
+    "yi": [{ "tag": "<宜>", "detail": "<依据>", "source": "<工具名>" }],
+    "ji": [{ "tag": "<忌>", "detail": "<依据>", "source": "<工具名>" }],
+    "motto": "<一句判词>"
+  }
+}

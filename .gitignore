@@ -1,0 +1,26 @@
+# 密钥与本地数据
+.env
+.env.*
+!.env.example
+
+# 探针原始输出可能含个人账户信息，绝不入库
+# 真实快照含账户余额与券名，只留本地
+data/snapshots/
+data/probe/
+data/private/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 渲染产物
+out/
+*.png.tmp
+
+# WorkBuddy 本地数据（含项目记忆，不入库）
+.workbuddy/
+
+# macOS
+.DS_Store
