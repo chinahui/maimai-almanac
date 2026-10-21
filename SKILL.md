@@ -1,11 +1,12 @@
 ---
 name: maimai-almanac
-description: 生成麦当劳「麦麦黄历」——每日一判，告诉你今天该清券、该兑换、还是该等。基于 campaign-calendar / query-my-coupons / query-my-account / mall-points-products 四个 MCP 工具。当用户问「今天该不该下单」「我的券什么时候过期」「积分换什么划算」「最近有什么活动」时使用。
+description: 生成麦当劳「麦麦黄历」——先判今天是什么日子（第几波活动在售、开售第几天、下一波什么时候），再判今天该清券、该兑换、还是该等。基于 campaign-calendar / query-my-coupons / query-my-account / mall-points-products 四个 MCP 工具。当用户问「今天该不该下单」「我的券什么时候过期」「积分换什么划算」「最近有什么活动」时使用。
 ---
 
 # 麦麦黄历
 
-把麦当劳账户里的三种会归零的资产（券、积分、活动场次）算成一句判决。
+先判今天是什么日子，再把账户里三种会归零的资产（券、积分、活动场次）算成一句判决。
+天时在前，人事在后——顺序反了，它就只是一份账户体检报告。
 
 ## 何时使用
 
@@ -20,20 +21,25 @@ description: 生成麦当劳「麦麦黄历」——每日一判，告诉你今�
 需要环境变量 `MCD_MCP_TOKEN`（在 `open.mcd.cn/mcp` 申请）。
 
 ```bash
-python src/almanac.py today          # 终端判决
-python src/almanac.py today --png out/today.png   # 竖排历书卡片
-python src/almanac.py snapshot       # 归档今日快照
+python src/almanac.py today                        # 终端判决（含天时）
+python src/almanac.py today --png out/today.png    # 像素卡片，1080×1440，适合手机
+python src/almanac.py today --style classic --png out/classic.png  # 竖排宣纸
+python src/almanac.py snapshot                     # 归档今日快照
 ```
 
 ## 判决逻辑
 
 顺序不能调，这是整个产品的世界观：
 
-1. **先看什么在腐烂** —— 券剩余天数 ≤ 3 天，进「宜·清券」。这条优先级最高，
+0. **先判今天是什么日子** —— `campaign-calendar` 一天返回十几条活动，大部分是长期在跑的
+   常规促销，不构成「日子」。按「第 N 弹 / 限量周边 > 上新 > 常规促销」打分，
+   挑出今天独有的那一条，再算出「在售第几日」和「下一波什么时候」。
+   **没有天时的宜忌，只是一份账户体检报告，不是黄历。**
+1. **再看什么在腐烂** —— 券剩余天数 ≤ 3 天，进「宜·清券」。这条优先级最高，
    因为过期是确定的损失，而等折扣是概率性收益。
 2. **再看积分花得值不值** —— 用「面值 ÷ 所需积分」算兑换率，与全商城中位数比较。
    达到中位数 1.5 倍以上才进「宜·兑换」；最低档写进「今日最坑」。
-3. **最后看活动** —— 今日在跑多少场、未来哪天有新的。
+3. **最后看活动总量** —— 今日在跑多少场、同场还有哪些、未来哪天换气。
 
 ## 三条硬约束
 
@@ -43,6 +49,8 @@ python src/almanac.py snapshot       # 归档今日快照
   必须用 `downTime > now` 自己判。
 - **积分商品面值不在 `price` 里**：`price` 恒为 0，面值写在 `spuName`（「18.8元2份…」）。
 - **缺数据要说出来**：任何一路取不到，必须在输出里注明「该维度缺失」，不许静默略过。
+- **活动标题不等于「日子」**：`campaign-calendar` 里十几条活动，不都是今天独有的。
+  不按波次排序，天时就会退化成一个活动海报。
 
 ## 不要做的事
 

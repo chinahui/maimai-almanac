@@ -155,6 +155,13 @@ def print_verdict(v) -> None:
     print()
     print(f"  {v.ganzhi} · {v.day} · {v.weekday}")
     print("  " + "─" * 58)
+    m = v.moment
+    print(f"  天时  {m.badge}　{m.head}")
+    if m.clock or m.note:
+        print("        " + " · ".join(x for x in (m.clock, m.note) if x))
+    if m.others:
+        print(f"        同场 {m.count} 场 · " + " / ".join(m.others))
+    print("  " + "─" * 58)
     print("  宜  " + "　".join(f.tag for f in v.yi) if v.yi else "  宜  —")
     print("  忌  " + "　".join(f.tag for f in v.ji) if v.ji else "  忌  —")
     print("  " + "─" * 58)
@@ -177,7 +184,7 @@ def print_verdict(v) -> None:
 
 STYLES = {
     # 名字: (模块, 宽, 高)
-    "pixel": ("render.pixel", 1080, 1620),
+    "pixel": ("render.pixel", 1080, 1440),
     "classic": ("render.card", 1080, 1440),
 }
 

@@ -126,26 +126,49 @@ def render_html(v: Verdict, meta: dict[str, Any] | None = None) -> str:
     yi_tags = [_clean(f.tag, 2) for f in v.yi][:2] or ["按兵"]
     ji_tags = [_clean(f.tag, 2) for f in v.ji][:2] or ["造次"]
 
-    # 三个数字：券 / 分 / 蒸发。顺序就是决策顺序，不能换。
-    slots = v.slots or {}
-    coupon_txt = _clean(slots.get("券", "—"), 12)
-    point_txt = _clean(slots.get("分", "—"), 8)
-    decay_txt = _clean(slots.get("腐", "—"), 14).replace("已蒸发", "").replace("分", "").strip()
+    # 第一层：天时。今天是什么日子——黄历的第一问，不再是注脚。
+    m = v.moment
+    head = _clean(m.head or "今日无新事", 18)
+    badge = _clean(m.badge or "平常日", 16)
+    clock = _clean(m.clock, 20)
+    note = _clean(m.note, 14)
+    crew = [x for x in (_clean(o, 9) for o in (m.others or [])) if x][:3]
 
-    # 券这格最要紧：把「剩 X 天」拆出来做大字，张数退到副行
-    days = re.search(r"剩\s*(\d+)\s*天", coupon_txt)
-    count = re.search(r"(\d+)\s*张", coupon_txt)
-    if days:
-        coupon_label = "券到期"
-        coupon_main = f'<span class="big">{days.group(1)}</span><span class="unit">天</span>'
-    else:
-        coupon_label = "可用券"
-        coupon_main = f'<span class="mid">{_e(coupon_txt)}</span>'
-    coupon_sub = f"{count.group(1)} 张在用" if count else ""
+    meta_line = " · ".join(b for b in (clock, note) if b)
+    crew_line = f"同场 {m.count} 场 · " + " / ".join(crew) if crew and m.count > 1 else ""
+
+    # 字号跟着字数走：天时标题不能换行，换行就散了。
+    # 按「视觉宽度」算——中文 1、英文数字 0.55、空格 0.35，否则中英混排会偏小。
+    def _vw(s: str) -> float:
+        return sum(0.35 if c.isspace() else 0.55 if c.isascii() else 1.0 for c in s)
+
+    hsize = max(46, min(88, int(930 / max(_vw(head), 1))))
 
     motto = _clean(v.motto or "按兵不动。", 22)
-    worst = _clean(v.worst.detail, 52) if v.worst else ""
-    countdown = _clean(v.countdown or "", 24)
+    # 「最坑」只能占一条窄栏：先把商品名摘掉，只留数字
+    worst = _clean(re.sub(r"「[^」]*」", "", v.worst.detail), 40) if v.worst else ""
+    worst = worst.replace("只有最优档的", "仅最优档").replace("  ", " ")
+    countdown = _clean(v.countdown or "", 26)
+
+    # 最后一层：卦象。账户自己的数字，退成一行注脚，
+    # 因为「已蒸发多少」是复盘，不是黄历该抢的位置。
+    slots = v.slots or {}
+    point_txt = _clean(slots.get("分", "0"), 8)
+    coupon_txt = re.sub(r"\s*·\s*剩\s*", "剩 ", _clean(slots.get("券", ""), 12)).strip()
+    decay_txt = _clean(slots.get("腐", ""), 12).replace("已蒸发", "").replace("分", "").strip()
+
+    bits = [f"账上 {point_txt} 分"]
+    if coupon_txt:
+        bits.append(f"券 {coupon_txt}")
+    if decay_txt and decay_txt != "无":
+        bits.append(f"月内已腐 {decay_txt} 分")
+    ledger = "，".join(bits)
+
+    # 每条判断都得能追到工具，这是项目的硬规矩；顺带把底部空白填了
+    srcs = sorted(
+        {f.source for f in (v.yi + v.ji + ([v.worst] if v.worst else [])) if f.source}
+    )
+    src_line = f"依据 {' / '.join(srcs)} 判定" if srcs else ""
 
     # 示例图要标明「非真实账户」，否则容易被当成真实数据传播
     source_note = meta.get("source_note")
@@ -199,65 +222,64 @@ def render_html(v: Verdict, meta: dict[str, Any] | None = None) -> str:
               font-variant-numeric:tabular-nums; }}
   .date .w {{ margin-top:8px; font-size:20px; color:{YELLOW}; letter-spacing:.08em; }}
 
-  /* ---------- 判决区：整张图的主角 ---------- */
-  .verdict {{ position:relative; display:flex; gap:18px; padding:54px 36px 0; }}
-  .box {{ flex:1; min-height:372px; border:7px solid {DARK}; box-shadow:12px 12px 0 {DARK};
-          padding:24px 16px 26px; display:flex; flex-direction:column;
-          align-items:center; justify-content:center; gap:18px; }}
+  /* ---------- 天时区：第一层。今天是什么日子 ---------- */
+  .sky {{ position:relative; margin:50px 36px 0; border:7px solid {DARK};
+          background:{WHITE}; box-shadow:12px 12px 0 {DARK};
+          padding:34px 28px 30px; }}
+  .badge {{ display:inline-block; background:{RED}; color:{YELLOW};
+            font-size:26px; font-weight:800; padding:8px 15px;
+            letter-spacing:.06em; line-height:1.15; }}
+  .head {{ margin-top:22px; font-weight:900; color:{DARK}; line-height:1.14;
+           letter-spacing:.01em; }}
+  .meta {{ margin-top:18px; font-size:26px; font-weight:800; color:{RED}; line-height:1.3; }}
+  .crew {{ margin-top:14px; font-size:20px; font-weight:600; color:{MUTED}; line-height:1.4; }}
+
+  /* ---------- 判决区：第二层。天时定了，才轮到宜忌 ---------- */
+  .verdict {{ position:relative; display:flex; gap:16px; margin:44px 36px 0; }}
+  .box {{ flex:1; min-height:272px; border:7px solid {DARK}; box-shadow:10px 10px 0 {DARK};
+          padding:18px 14px 22px; display:flex; flex-direction:column;
+          align-items:center; justify-content:center; gap:16px; }}
   .box.yi {{ background:{RED}; }}
   .box.ji {{ background:{YELLOW}; }}
-  .box .hd {{ font-size:92px; font-weight:900; line-height:.9; letter-spacing:.02em; }}
+  .box .hd {{ font-size:74px; font-weight:900; line-height:.9; letter-spacing:.02em; }}
   .box.yi .hd {{ color:{YELLOW}; text-shadow:5px 5px 0 {DARK}; }}
   .box.ji .hd {{ color:{DARK}; text-shadow:4px 4px 0 {WHITE}; }}
-  .chips {{ display:flex; flex-direction:column; gap:10px; width:100%; }}
-  .chip {{ font-size:50px; font-weight:800; text-align:center; padding:14px 4px;
+  .chips {{ display:flex; flex-direction:column; gap:9px; width:100%; }}
+  .chip {{ font-size:47px; font-weight:800; text-align:center; padding:11px 4px;
            letter-spacing:.08em; line-height:1.1; }}
   .box.yi .chip {{ background:{YELLOW}; color:{DARK}; }}
   .box.ji .chip {{ background:{DARK}; color:{YELLOW}; }}
   .chip.empty {{ opacity:.45; }}
 
-  /* ---------- 数字条 ---------- */
-  .nums {{ position:relative; margin:52px 36px 0; border:7px solid {DARK};
-           background:{WHITE}; box-shadow:12px 12px 0 {DARK};
-           display:flex; min-height:258px; }}
-  .num {{ flex:1; padding:20px 8px; text-align:center;
-          display:flex; flex-direction:column; justify-content:center; }}
-  .num + .num {{ border-left:5px solid {DARK}; }}
-  .num .lb {{ font-size:20px; color:{MUTED}; letter-spacing:.12em; font-weight:700; }}
-  .num .vl {{ margin-top:14px; font-size:48px; font-weight:900; color:{DARK};
-              line-height:1; font-variant-numeric:tabular-nums;
-              display:flex; align-items:baseline; justify-content:center; }}
-  .num .vl.hot {{ color:{RED}; }}
-  .num .big {{ font-size:72px; }}
-  .num .unit {{ font-size:28px; margin-left:3px; }}
-  .num .mid {{ font-size:36px; }}
-  .num .sub {{ margin-top:9px; font-size:22px; color:{MUTED}; font-weight:700; }}
-  /* 「已蒸发」是这张图最该被看见的数字，单独加深 */
-  .num .gone {{ color:{RED}; }}
-
-  /* ---------- 判词：整块黄底菜单牌，只此一句，不拆碎 ---------- */
-  .motto {{ position:relative; margin:50px 36px 0; border:7px solid {DARK};
-            background:{YELLOW}; box-shadow:12px 12px 0 {DARK};
-            min-height:186px; padding:24px 26px;
+  /* ---------- 判词：只此一句，不拆碎 ---------- */
+  .motto {{ position:relative; margin:34px 36px 0; border:7px solid {DARK};
+            background:{YELLOW}; box-shadow:10px 10px 0 {DARK};
+            min-height:196px; padding:22px 24px;
             display:flex; align-items:center; justify-content:center; }}
-  .motto .q {{ font-size:50px; font-weight:900; color:{DARK}; letter-spacing:.02em;
-               line-height:1.32; text-align:center; }}
+  .motto .q {{ font-size:46px; font-weight:900; color:{DARK}; letter-spacing:.02em;
+               line-height:1.34; text-align:center; }}
 
-  /* ---------- 最坑 ---------- */
-  .worst {{ position:relative; margin:34px 36px 0; background:{DARK};
-            padding:20px 22px; display:flex; gap:14px; align-items:flex-start; }}
-  .worst .tag {{ flex:0 0 auto; font-size:19px; font-weight:800; color:{WHITE};
-                 background:{RED}; padding:5px 9px; letter-spacing:.06em;
+  /* ---------- 最坑：窄条，只留一行 ---------- */
+  .worst {{ position:relative; margin:28px 36px 0; background:{DARK};
+            padding:14px 18px; display:flex; gap:12px; align-items:flex-start; }}
+  .worst .tag {{ flex:0 0 auto; font-size:18px; font-weight:800; color:{WHITE};
+                 background:{RED}; padding:4px 8px; letter-spacing:.06em;
                  line-height:1.2; }}
-  .worst .tx {{ font-size:25px; color:{CREAM}; line-height:1.42; font-weight:600; }}
-  .gaps {{ position:relative; margin:12px 36px 0; font-size:17px; color:#8C8578; }}
+  .worst .tx {{ font-size:22px; color:{CREAM}; line-height:1.32; font-weight:600; }}
+
+  /* ---------- 卦象：账本退到最后一行 ---------- */
+  .ledger {{ position:relative; margin:26px 36px 0; font-size:21px; font-weight:700;
+             color:{MUTED}; letter-spacing:.03em; line-height:1.5; }}
+  .src-line {{ position:relative; margin:14px 36px 0; font-size:17px; color:#8C8578;
+               letter-spacing:.02em; line-height:1.5; }}
+  .gaps {{ position:relative; margin:10px 36px 0; font-size:16px; color:#8C8578; }}
   .mark {{ position:relative; margin:auto 36px 0; text-align:center; font-size:16px;
-           color:#8C8578; letter-spacing:.1em; padding-bottom:14px; }}
+           color:#8C8578; letter-spacing:.1em; padding:16px 0 14px; }}
 
   /* ---------- 底栏 ---------- */
   .foot {{ position:relative; margin-top:auto; background:{DARK};
            padding:24px 36px; display:flex; align-items:center; gap:14px; }}
-  .foot .cd {{ flex:1; font-size:24px; color:{YELLOW}; font-weight:700; }}
+  .foot .cd {{ flex:1; font-size:23px; color:{YELLOW}; font-weight:700; }}
   .foot .src {{ font-size:16px; color:#8E897D; letter-spacing:.04em; }}
   .foot .bt {{ flex:0 0 auto; line-height:0; }}
 </style></head>
@@ -275,6 +297,13 @@ def render_html(v: Verdict, meta: dict[str, Any] | None = None) -> str:
     </div>
   </div>
 
+  <div class="sky">
+    <div class="badge">{_e(badge)}</div>
+    <div class="head" style="font-size:{hsize}px">{_e(head)}</div>
+    {f'<div class="meta">{_e(meta_line)}</div>' if meta_line else ''}
+    {f'<div class="crew">{_e(crew_line)}</div>' if crew_line else ''}
+  </div>
+
   <div class="verdict">
     <div class="box yi">
       <div class="hd">宜</div>
@@ -286,33 +315,18 @@ def render_html(v: Verdict, meta: dict[str, Any] | None = None) -> str:
     </div>
   </div>
 
-  <div class="nums">
-    <div class="num">
-      <div class="lb">{coupon_label}</div>
-      <div class="vl hot">{coupon_main}</div>
-      <div class="sub">{coupon_sub}</div>
-    </div>
-    <div class="num">
-      <div class="lb">可用积分</div>
-      <div class="vl"><span class="mid">{_e(point_txt)}</span><span class="unit">分</span></div>
-      <div class="sub">在账上</div>
-    </div>
-    <div class="num">
-      <div class="lb">已蒸发</div>
-      <div class="vl gone"><span class="mid">{_e(decay_txt or "0")}</span><span class="unit">分</span></div>
-      <div class="sub">忘掉的</div>
-    </div>
-  </div>
-
   <div class="motto"><div class="q">{_e(motto)}</div></div>
 
   {f'<div class="worst"><span class="tag">最坑</span><div class="tx">{_e(worst)}</div></div>' if worst else ''}
+
+  <div class="ledger">{_e(ledger)}</div>
+  {f'<div class="src-line">{_e(src_line)}</div>' if src_line else ''}
   {gaps}
 
   {note_html}
 
   <div class="foot">
-    <div class="cd">{_e(countdown) or "今天没有更近的活动"}</div>
+    <div class="cd">{_e(countdown) or "日历里没有更近的新事"}</div>
     <div class="bt">{_pixel_burger(46)}</div>
   </div>
 </div></div></body></html>"""

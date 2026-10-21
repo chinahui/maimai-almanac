@@ -11,7 +11,8 @@ import re
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from .parser import Account, Coupon, Redeem, median_rate, price_signals
+from .moment import Moment, build_moment, next_wave
+from .parser import Account, Coupon, Redeem, median_rate
 
 STEMS = "甲乙丙丁戊己庚辛壬癸"
 BRANCHES = "子丑寅卯辰巳午未申酉戌亥"
@@ -43,6 +44,7 @@ class Verdict:
     yi: list[Finding] = field(default_factory=list)
     ji: list[Finding] = field(default_factory=list)
     slots: dict[str, str] = field(default_factory=dict)
+    moment: Moment = field(default_factory=Moment)
     headline: str = ""
     countdown: str = ""
     worst: Finding | None = None
@@ -57,6 +59,7 @@ class Verdict:
             "yi": [f.to_dict() for f in self.yi],
             "ji": [f.to_dict() for f in self.ji],
             "slots": self.slots,
+            "moment": self.moment.to_dict(),
             "headline": self.headline,
             "countdown": self.countdown,
             "worst": self.worst.to_dict() if self.worst else None,
@@ -86,7 +89,7 @@ def chinese_day(n: int) -> str:
     return "三十" + CN_NUM[n - 30] if n > 30 else "三十一"
 
 
-def _days_until(day: str, today: date) -> int:
+def _days_until(day: str, today: date) -> int:  # noqa: D103 - 保留给快照回溯用
     return (date.fromisoformat(day) - today).days
 
 
@@ -174,35 +177,13 @@ def build_verdict(
         )
         # 与「今日最坑」重复，不再单列为忌项，避免同一件事说两遍
 
-    # ---------- 活动：今天在跑什么 ----------
+    # ---------- 天时：今天是不是一个「日子」 ----------
+    # 这一层的顺序很重要：先定今天是什么日子，再谈你该做什么。
     today_key = today.isoformat()
-    todays_raw = (calendar.get(today_key) or {}).get("activities") or []
-    seen_titles: set[str] = set()
-    todays = [a for a in todays_raw if not (a.get("title") in seen_titles or seen_titles.add(a.get("title")))]
-    if todays:
-        prices = [
-            s["first_price"]
-            for s in (price_signals(a.get("body", "")) for a in todays)
-            if s["first_price"]
-        ]
-        low = min(prices) if prices else None
-        v.headline = f"今日 {len(todays)} 场活动在跑" + (f"，主推价低至 ¥{low:g}" if low else "")
-
-    # ---------- 倒计时：下一个「全新」活动 ----------
-    today_titles = {a.get("title") for a in todays}
-    for day, entry in sorted(calendar.items()):
-        if day <= today_key:
-            continue
-        fresh = [a for a in (entry.get("activities") or []) if a.get("title") not in today_titles]
-        if fresh:
-            gap = _days_until(day, today)
-            v.countdown = f"{gap} 天后 · {day[5:]} · {fresh[0]['title'][:18]}"
-            break
-    else:
-        entries = [d for d in sorted(calendar) if d > today_key]
-        if entries:
-            gap = _days_until(entries[0], today)
-            v.countdown = f"{gap} 天后 · {entries[0][5:]} · 有新活动"
+    todays = (calendar.get(today_key) or {}).get("activities") or []
+    v.moment = build_moment(today, calendar)
+    v.headline = v.moment.head or "今日无新事"
+    v.countdown = next_wave(today, calendar)
 
     # ---------- 加价换周边：真实存在的行为陷阱 ----------
     for act in todays:

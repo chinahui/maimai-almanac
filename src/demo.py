@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from engine.moment import Moment  # noqa: E402
 from engine.verdict import Finding, Verdict, ganzhi_year  # noqa: E402
 from render.pixel import render_html  # noqa: E402
 
@@ -38,8 +39,18 @@ def build_demo() -> Verdict:
         Finding("加购", "「联名周边」要加 ¥39.9 才得，非必需就别凑", "campaign-calendar", 45),
     ]
     v.slots = {"券": "3 张 · 剩 1 天", "分": "1250", "腐": "已蒸发 480 分"}
+    v.moment = Moment(
+        kind="发售期",
+        head="周边第二弹 · 联名徽章",
+        clock="10月15日 10:45 开售",
+        note="加 ¥39.9 可得",
+        elapsed=6,
+        others=["蓝莓爆爆珠麦旋风", "灰焰圆筒", "韩式蘸酱"],
+        count=14,
+    )
+    v.headline = v.moment.head
     v.motto = "先清券，再兑换。今日不宜囤。"
-    v.countdown = "1 天后 · 10-22 · 限定周边开售"
+    v.countdown = "1 天后 · 10-22 · 第三周周边开售"
     v.worst = Finding(
         "硬换",
         "800 分只换到 ¥21.9 组合，每分 0.027 元，只有最优档的 20%",
